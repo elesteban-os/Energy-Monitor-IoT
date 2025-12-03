@@ -6,6 +6,73 @@
  *   - Potencia, Energía, Factor de potencia
  *************************************************/
 
+// wifi
+#include <WiFi.h>
+#include <HTTPClient.h>
+
+//Configuracion para el wifi
+// aqui hay que poner el nombre de la red donde este y la contraseña para que se conecte al Wifi
+const char* ssid = "iPhone";
+const char* password = "12123434";
+
+//la url del api, ahorita es una de prueba
+String api_url ="https://eocit80vsw6avkx.m.pipedream.net";
+
+//identificacion del microcontrolador
+String generarSerial(){
+  WiFi.mode(WIFI_STA);
+  delay(100);
+  String mac = WiFi.macAddress();
+  mac.replace(":","");
+  return "ESP32C3-" + mac;
+}
+String serialDispositivo;
+
+// conexion al wifi
+void conectarWiFi(){
+  Serial.println("Conectando al wifi...");
+  WiFi.begin(ssid,password);
+
+  while (WiFi.status() != WL_CONNECTED){
+    delay(400);
+    Serial.print(".");
+  }
+
+  Serial.println("\nConectado!");
+  Serial.print("IP: ");
+  Serial.println(WiFi.localIP());
+}
+
+//POST EN LA API
+void enviarLectura(float voltaje, float corriente, float potencia, float energia, float frecuencia, float fp){
+  if (WiFi.status() != WL_CONNECTED){
+    Serial.println("Wifi caído, reconectando...");
+    conectarWiFi();
+  }
+
+  HTTPClient http;
+  http.begin(api_url);
+  http.addHeader("Content-Type","application/json");
+
+  String json = "{";
+  json += "\"sensor_name\": \"ZMPT101B + ACS712  \",";
+  json += "\"Voltaje\":" + String(voltaje,2) + ",";
+  json += "\"Corriente\":" + String(corriente,2) + ",";
+  json += "\"Potencia\":" + String(potencia,2) + ",";
+  json += "\"Energia\":" + String(energia,2) + ",";
+  json += "\"Frecuencia\":" + String(frecuencia,2) + ",";
+  json += "\"Factor Potencia\":" + String(fp,2);
+  json += "}";
+
+  int code = http.POST(json);
+
+  Serial.print("POST código; ");
+  Serial.println(code);
+  Serial.println("Respuesta: " + http.getString());
+
+  http.end();
+
+}
 
 // CONFIG ZMPT101B //
 const int pinZMPT = 4;  
@@ -49,6 +116,15 @@ void setup() {
   analogReadResolution(12);
   delay(500);
 
+  lastEnergyUpdate = millis();
+  
+  // Wifi
+  WiFi.mode(WIFI_STA);
+  serialDispositivo = generarSerial();
+  Serial.println("Serial: " + serialDispositivo);
+
+  conectarWiFi();
+
   // Calibración ACS712 en vacío
   Serial.println("\nCalibrando ACS712...");
   long rawAvg = readAverageACS(500);
@@ -56,117 +132,107 @@ void setup() {
   VoffsetACS = Vadc * DIV_FACTOR;
   Serial.print("Offset ACS712 (V): ");
   Serial.println(VoffsetACS, 5);
-
-  lastEnergyUpdate = millis();
 }
 
-
+//loop
+unsigned long previo = 0;
+const unsigned long intervalo = 5000; // son 5 segundos
 void loop() {
 
-  const int samples = 2000;  
-  double sumSqVolt = 0;  
-  double sumSqCurr = 0;  
-  float realPowerSum = 0;
+  const int samples = 2000;
+  double sumSqVolt = 0;
+  double sumSqCurr = 0;
+  double sumPower  = 0;
 
-  // Para factor de potencia
-  float lastV = 0, lastI = 0;
+  unsigned long startMicros = micros();
 
   for (int i = 0; i < samples; i++) {
 
-    // ==========================
-    // VOLTAJE (ZMPT101B)
-    int rawV = analogRead(pinZMPT);
-    float Vzmpt_adc = rawV * (Vref / ADCmax);
-    float centeredV = Vzmpt_adc - offsetZMPT;
+    // ==============================
+    // LECTURA VOLTAJE
+    // ==============================
+    float rawV = analogRead(pinZMPT);
+    float Vadc = rawV * (Vref / ADCmax);
+    float Vin = Vadc - offsetZMPT;
 
-    // frecuencia
-    bool above = (centeredV > 0);
+    // Cálculo de frecuencia por cruce de cero
+    bool above = (Vin > 0);
     if (!lastAbove && above) {
       unsigned long now = micros();
       if (lastCrossTime != 0) {
-        unsigned long period = now - lastCrossTime;
-        frequency = 1e6 / period;
+        unsigned long periodo = now - lastCrossTime;
+        frequency = 1e6 / periodo;
       }
       lastCrossTime = now;
     }
     lastAbove = above;
 
-    sumSqVolt += centeredV * centeredV;
+    sumSqVolt += Vin * Vin;
 
-    // ==========================
-    // CORRIENTE (ACS712)
-    int rawI = analogRead(pinACS);
-    float Iadc = (rawI * Vref) / ADCmax;
+    // ==============================
+    // LECTURA CORRIENTE
+    // ==============================
+    float rawI = analogRead(pinACS);
+    float Iadc = rawI * (Vref / ADCmax);
     float Iout = Iadc * DIV_FACTOR;
+    float Iinst = (Iout - VoffsetACS) / SENS;
 
-    float instCurrent = (Iout - VoffsetACS) / SENS;
-    sumSqCurr += instCurrent * instCurrent;
+    sumSqCurr += Iinst * Iinst;
 
-    // ==========================
+    // ==============================
     // POTENCIA INSTANTÁNEA
-    // aproximada: P = Vinstant * Iinstant
-    realPowerSum += (centeredV * calibrationFactor) * instCurrent;
-
-    delayMicroseconds(300);
+    // Usa la misma forma de onda sin delay
+    // ==============================
+    sumPower += (Vin * calibrationFactor) * Iinst;
   }
 
-  // ========= RMS =========
+  // ===============================
+  // CÁLCULOS RMS
+  // ===============================
   float Vrms = sqrt(sumSqVolt / samples) * calibrationFactor;
   float Irms = sqrt(sumSqCurr / samples);
 
-  if (Vrms < 100) {
-    Vrms = 0;
-  }
-  if (Irms < 0.100) {
-    Irms = 0;
-  }
+  // ===============================
+  // TOLERANCIAS
+  // ===============================
+  if (Vrms < 100) Vrms = 0;
+  if (Irms < 0.10) Irms = 0;
 
-  // ========= Potencia =========
-  float realPower = realPowerSum / samples;       // Watts
-  if (Vrms == 0 || Irms == 0) {
-      realPower = 0;
-  }
+  // ===============================
+  // POTENCIA
+  // ===============================
+  float realPower = sumPower / samples;
 
-  float apparentPower = Vrms * Irms;              // VA
-  float powerFactor = 0;
+  if (Vrms == 0 || Irms == 0) realPower = 0;
 
-  if (apparentPower > 0.1) {
-    powerFactor = realPower / apparentPower;
-  }
+  float apparentPower = Vrms * Irms;
+  float powerFactor = (apparentPower > 1) ? realPower / apparentPower : 0;
 
-  // ========= Energía =========
+  // ===============================
+  // ENERGÍA
+  // ===============================
   unsigned long now = millis();
-  float dt_h = (now - lastEnergyUpdate) / 3600000.0;  // horas
+  float dt_h = (now - lastEnergyUpdate) / 3600000.0;
   energy_Wh += realPower * dt_h;
   lastEnergyUpdate = now;
 
-  // ========== OUTPUT ==========
+  // ===============================
+  // IMPRIMIR
+  // ===============================
   Serial.println("\n===== MEDICIONES =====");
-
-  Serial.print("Voltaje RMS: ");
-  Serial.print(Vrms, 2);
-  Serial.println(" V");
-
-  Serial.print("Corriente RMS: ");
-  Serial.print(Irms, 3);
-  Serial.println(" A");
-
-  Serial.print("Frecuencia: ");
-  Serial.print(frequency, 2);
-  Serial.println(" Hz");
-
-  Serial.print("Potencia Real (P): ");
-  Serial.print(realPower, 2);
-  Serial.println(" W");
-
-  Serial.print("Factor de Potencia (PF): ");
-  Serial.println(powerFactor, 2);
-
-  Serial.print("Energía acumulada: ");
-  Serial.print(energy_Wh, 3);
-  Serial.println(" Wh");
-
+  Serial.printf("Voltaje RMS: %.2f V\n", Vrms);
+  Serial.printf("Corriente RMS: %.3f A\n", Irms);
+  Serial.printf("Frecuencia: %.2f Hz\n", frequency);
+  Serial.printf("Potencia Real: %.2f W\n", realPower);
+  Serial.printf("Factor de Potencia: %.3f\n", powerFactor);
+  Serial.printf("Energía: %.3f Wh\n", energy_Wh);
   Serial.println("=======================\n");
 
-  delay(300);
+  // ===============================
+  // ENVÍO A API CADA 5 SEG
+  // ===============================
+  if (millis() - previo >= intervalo) {
+    previo = millis();
+    enviarLectura(Vrms, Irms, realPower, energy_Wh, frequency, powerFactor);
+  }
 }
