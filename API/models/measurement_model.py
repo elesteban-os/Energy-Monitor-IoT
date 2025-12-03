@@ -5,35 +5,33 @@ import datetime
 import sys
 from models.mock_memory import mock_devices
 
-# Modelos Pydantic (Entrada de Datos)
-
+# Modelo de entrada ajustado al formato definitivo del sensor
 class Measurement(BaseModel):
-    
     token: str = Field(..., description="Token de autenticación del dispositivo.")
-    
-    # rangos para la validación automática 
-    voltage: float = Field(..., ge=80.0, le=260.0, description="Voltaje (V)")
-    current: float = Field(..., ge=0.0, le=100.0, description="Corriente (A)")
-    act_power: float = Field(..., ge=0.0, description="Potencia activa (kW)")
-    fact_power: float = Field(..., ge=0.0, le=1.0, description="Factor de potencia")
-    freq: float = Field(..., ge=45.0, le=65.0, description="Frecuencia (Hz)")
-    act_energy: float = Field(..., ge=0.0, description="Energía acumulada (kWh)")
-    alarm: bool = Field(..., description="Alarma de sobrecarga")
+    sensor_name: str = Field(..., alias="sensor_name", description="Nombre del sensor (ej. PZEM004T).")
+    voltaje: float = Field(..., alias="Voltaje", description="Voltaje (V)")
+    corriente: float = Field(..., alias="Corriente", description="Corriente (A)")
+    potencia: float = Field(..., alias="Potencia", description="Potencia (W)")
+    energia: float = Field(..., alias="Energia", description="Energía acumulada (Wh)")
+    frecuencia: float = Field(..., alias="Frecuencia", description="Frecuencia (Hz)")
+    factor_potencia: float = Field(..., alias="Factor Potencia", description="Factor de potencia (0-1)")
 
-#Lógica de MongoDB
+    class Config:
+        populate_by_name = True  # permite usar los alias al volcar el modelo
+
+# Lógica de MongoDB
 
 def save_measurement_logic(device_info: dict, data: Measurement):
-    # La información del dispositivo viene de MySQL, el resto de Pydantic.
-    # Convertimos el objeto Pydantic a diccionario, excluyendo el token
-    measurement_doc = data.model_dump(exclude={'token'})
-    # Añadimos metadata esencial para el análisis en Grafana
+    # Volcamos el payload con los alias originales, excluyendo el token
+    measurement_doc = data.model_dump(exclude={'token'}, by_alias=True)
+    # Añadimos metadata para trazabilidad
     document = {
-        "device_serial": device_info['serial'],
+        "device_id": device_info['serial'],
         "timestamp": datetime.datetime.utcnow(),
         **measurement_doc
     }
 
-    #MODO MOCk
+    # MODO MOCK
     if USE_MOCK_DB:
         print(f"Lectura mock de {device_info['serial']} almacenada (simulada).")
         return True

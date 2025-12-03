@@ -11,10 +11,13 @@ def receive_measurement(data: Measurement):
     Valida token, verifica estado y guarda en MongoDB.
     """
     token = data.token
-    
+    # Registro simple para depuración de flujo
+    print(f"[readings] Token recibido: {token}")
+
     #Autenticación y chequeo de estado (La lógica esta en models/device_model.py)
     try:
         device_info = get_device_info_by_token(token)
+        print(f"[readings] Dispositivo encontrado: {device_info}")
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

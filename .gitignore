@@ -25,3 +25,9 @@ __pycache__/
 *.o
 *.so
 build/
+
+# ---------------------------------------------------------------- #
+# ARCHIVOS LOCALES DEL PROYECTO (NO VERSIONAR)                     #
+# ---------------------------------------------------------------- #
+Proceso_proyecto.md
+API/.env

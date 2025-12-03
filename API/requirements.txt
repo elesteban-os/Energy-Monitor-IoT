@@ -3,3 +3,4 @@ uvicorn          # Servidor ASGI para correr FastAPI
 pymysql          # Cliente para conectarnos a MySQL
 pymongo          # Cliente para conectarnos a MongoDB
 python-dotenv    # Para usar variables de entorno con archivo .env
+cryptography     # Requerido por PyMySQL para caching_sha2_password
