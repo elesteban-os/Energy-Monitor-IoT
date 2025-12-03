@@ -42,7 +42,7 @@ def startup_services():
 
 app = FastAPI(
     title="Energy Monitoring API",
-    description="Servicio para registro de ESP32 y almacenamiento de mediciones.",
+    description="Servicio para registro de ESP32 y almacenamiento de mediciones..",
     version="1.0.0"
 )
 
