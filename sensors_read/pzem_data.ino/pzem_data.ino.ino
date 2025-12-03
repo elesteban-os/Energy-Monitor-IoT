@@ -22,7 +22,7 @@ void loop() {
   float freq    = pzem.frequency();
   float pf      = pzem.pf();
 
-  Serial.println("--------- PZEM004T ---------");
+  Serial.println("---------- PZEM004T ----------");
 
   if(!isnan(voltage))   Serial.println(String("Voltaje: ") + voltage + " V");
   else                  Serial.println("Voltaje: error");
