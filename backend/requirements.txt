@@ -1,4 +1,5 @@
 pymongo
+requests
 
 #pip install -r requirements.txt No se si tienen que instalar algo mas aparte de pymongo pero ahi se los dejo por si acaso
 #pip install pymongo
