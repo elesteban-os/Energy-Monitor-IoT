@@ -1,0 +1,27 @@
+# ---------------------------------------------------------------- #
+# ARCHIVOS DE CONFIGURACIÓN DE VISUAL STUDIO CODE (VSCODE)         #
+# (Comúnmente usado por los devs de C/C++ como tu compañero)       #
+# ---------------------------------------------------------------- #
+.vscode/c_cpp_properties.json
+.vscode/launch.json
+.vscode/settings.json
+
+# Opcional: Ignorar toda la carpeta de VS Code, excepto si necesitas 
+# compartir alguna configuración con el equipo. Si no lo necesitas, usa:
+# .vscode/
+
+# ---------------------------------------------------------------- #
+# ENTORNO VIRTUAL DE PYTHON                                        #
+# (Necesario para tu desarrollo de la API)                         #
+# ---------------------------------------------------------------- #
+venv/
+.venv/
+
+# ---------------------------------------------------------------- #
+# ARCHIVOS GENERADOS (Python/C++)                                  #
+# ---------------------------------------------------------------- #
+__pycache__/
+*.pyc
+*.o
+*.so
+build/
